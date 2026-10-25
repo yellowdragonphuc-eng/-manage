@@ -171,6 +171,10 @@
             background: linear-gradient(135deg, #6366f1, #8b5cf6);
             color: white; border-radius: 20px; font-size: 12px; font-weight: 600;
         }
+        .link-author {
+            font-size: 11px; color: #64748b;
+            margin-top: 4px; font-style: italic;
+        }
         .link-actions { display: flex; gap: 8px; }
         .icon-btn {
             width: 32px; height: 32px; border: none; border-radius: 8px;
@@ -246,14 +250,27 @@
             color: #64748b; grid-column: 1/-1;
         }
         .empty-state-icon { font-size: 80px; margin-bottom: 20px; opacity: 0.5; }
+        .shared-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #10b981;
+            color: white;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
 
     <div id="loginScreen" class="login-container">
         <div class="login-box">
-            <h1> VoiceLinks Manager</h1>
-            <p>Quản lý và tổ chức các đường link âm thanh của bạn</p>
+            <h1>🎵 VoiceLinks Manager</h1>
+            <p>Quản lý và chia sẻ link âm thanh với bạn bè</p>
+            <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: #92400e;">
+                ️ Dữ liệu được chia sẻ chung cho tất cả người dùng
+            </div>
             <button class="google-btn" id="googleLoginBtn">🔐 Đăng nhập bằng Google</button>
         </div>
     </div>
@@ -261,8 +278,8 @@
     <div id="appContainer" class="app-container">
         <header class="header">
             <div class="logo">
-                <div class="logo-icon">🎵</div>
-                <h1>VoiceLinks Manager</h1>
+                <div class="logo-icon"></div>
+                <h1>VoiceLinks Manager <span class="shared-badge">SHARED</span></h1>
             </div>
             <div class="user-info">
                 <img id="userAvatar" class="user-avatar" src="" alt="Avatar">
@@ -448,18 +465,22 @@
         async function loadData() {
             if (!currentUser) return;
             try {
-                const foldersRef = collection(db, 'users', currentUser.uid, 'folders');
+                // Load folders - SHARED (không theo user)
+                const foldersRef = collection(db, 'folders');
                 const foldersSnap = await getDocs(foldersRef);
                 folders = foldersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
                 if (folders.length === 0) {
-                    await setDoc(doc(db, 'users', currentUser.uid, 'folders', 'default'), {
-                        name: 'Chưa phân loại', createdAt: new Date().toISOString()
+                    await setDoc(doc(db, 'folders', 'default'), {
+                        name: 'Chưa phân loại', 
+                        createdAt: new Date().toISOString(),
+                        createdBy: currentUser.displayName || currentUser.email
                     });
                     folders = [{ id: 'default', name: 'Chưa phân loại' }];
                 }
 
-                const linksRef = collection(db, 'users', currentUser.uid, 'links');
+                // Load links - SHARED (không theo user)
+                const linksRef = collection(db, 'links');
                 const linksSnap = await getDocs(linksRef);
                 links = linksSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -483,9 +504,9 @@
                 const linkCount = links.filter(l => l.folder === folder.id).length;
                 folderList.innerHTML += `
                     <li class="folder-item ${currentFolder === folder.id ? 'active' : ''}" data-folder="${folder.id}">
-                        <span class="folder-name">📁 ${folder.name} (${linkCount})</span>
+                        <span class="folder-name"> ${folder.name} (${linkCount})</span>
                         <div class="folder-actions">
-                            <button class="folder-action-btn edit-btn" data-folder-id="${folder.id}" title="Sửa tên">✏️ Sửa</button>
+                            <button class="folder-action-btn edit-btn" data-folder-id="${folder.id}" title="Sửa tên">️ Sửa</button>
                             <button class="folder-action-btn delete-btn" data-folder-id="${folder.id}" title="Xóa thư mục">🗑️ Xóa</button>
                         </div>
                     </li>
@@ -538,10 +559,10 @@
                 if (linkCount > 0) {
                     const linksToDelete = links.filter(l => l.folder === folderId);
                     for (const link of linksToDelete) {
-                        await deleteDoc(doc(db, 'users', currentUser.uid, 'links', link.id));
+                        await deleteDoc(doc(db, 'links', link.id));
                     }
                 }
-                await deleteDoc(doc(db, 'users', currentUser.uid, 'folders', folderId));
+                await deleteDoc(doc(db, 'folders', folderId));
                 if (currentFolder === folderId) currentFolder = 'all';
                 await loadData();
             } catch (error) {
@@ -570,7 +591,7 @@
             if (searchTerm) {
                 filteredLinks = filteredLinks.filter(l => 
                     l.name.toLowerCase().includes(searchTerm) ||
-                    l.url.toLowerCase().includes(searchTerm) ||
+                    (l.url && l.url.toLowerCase().includes(searchTerm)) ||
                     (l.tags && l.tags.some(t => t.toLowerCase().includes(searchTerm)))
                 );
             }
@@ -590,6 +611,7 @@
                 const folder = folders.find(f => f.id === link.folder);
                 const date = new Date(link.createdAt).toLocaleDateString('vi-VN');
                 const tags = link.tags ? link.tags.map(t => `<span class="tag">${t}</span>`).join('') : '';
+                const author = link.createdBy || 'Unknown';
 
                 return `
                     <div class="link-card" data-id="${link.id}">
@@ -597,6 +619,7 @@
                             <div>
                                 <div class="link-title">${link.name}</div>
                                 <span class="link-folder">${folder ? folder.name : 'Unknown'}</span>
+                                <div class="link-author">👤 ${author}</div>
                             </div>
                             <div class="link-actions">
                                 <button class="icon-btn edit" data-action="edit" data-id="${link.id}" title="Sửa">✏️</button>
@@ -652,7 +675,7 @@
             document.getElementById('linkModalTitle').textContent = 'Chỉnh sửa link';
             document.getElementById('linkId').value = link.id;
             document.getElementById('linkName').value = link.name;
-            document.getElementById('linkUrl').value = link.url;
+            document.getElementById('linkUrl').value = link.url || '';
             document.getElementById('linkFolder').value = link.folder;
             document.getElementById('linkTags').value = link.tags ? link.tags.join(', ') : '';
             linkModal.classList.add('active');
@@ -661,7 +684,7 @@
         async function deleteLink(id) {
             if (!confirm('Bạn có chắc muốn xóa link này?')) return;
             try {
-                await deleteDoc(doc(db, 'users', currentUser.uid, 'links', id));
+                await deleteDoc(doc(db, 'links', id));
                 await loadData();
             } catch (error) {
                 alert('Lỗi xóa: ' + error.message);
@@ -676,19 +699,21 @@
                 url: document.getElementById('linkUrl').value.trim(),
                 folder: document.getElementById('linkFolder').value,
                 tags: document.getElementById('linkTags').value.split(',').map(t => t.trim()).filter(t => t),
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser.displayName || currentUser.email
             };
 
             try {
                 if (id) {
                     const existingLink = links.find(l => l.id === id);
-                    await setDoc(doc(db, 'users', currentUser.uid, 'links', id), {
-                        ...linkData, createdAt: existingLink.createdAt
-                    });
+                    linkData.createdAt = existingLink.createdAt;
+                    linkData.createdBy = existingLink.createdBy || currentUser.displayName || currentUser.email;
+                    await setDoc(doc(db, 'links', id), linkData);
                 } else {
                     linkData.createdAt = new Date().toISOString();
+                    linkData.createdBy = currentUser.displayName || currentUser.email;
                     const newId = Date.now().toString();
-                    await setDoc(doc(db, 'users', currentUser.uid, 'links', newId), linkData);
+                    await setDoc(doc(db, 'links', newId), linkData);
                 }
                 linkModal.classList.remove('active');
                 await loadData();
@@ -720,12 +745,16 @@
 
             try {
                 if (folderId) {
-                    await setDoc(doc(db, 'users', currentUser.uid, 'folders', folderId), {
-                        name, updatedAt: new Date().toISOString()
+                    await setDoc(doc(db, 'folders', folderId), {
+                        name, 
+                        updatedAt: new Date().toISOString(),
+                        updatedBy: currentUser.displayName || currentUser.email
                     }, { merge: true });
                 } else {
-                    await setDoc(doc(db, 'users', currentUser.uid, 'folders', Date.now().toString()), {
-                        name, createdAt: new Date().toISOString()
+                    await setDoc(doc(db, 'folders', Date.now().toString()), {
+                        name, 
+                        createdAt: new Date().toISOString(),
+                        createdBy: currentUser.displayName || currentUser.email
                     });
                 }
                 folderModal.classList.remove('active');
@@ -740,8 +769,9 @@
 
         exportBtn.addEventListener('click', () => {
             const data = {
-                version: '1.0',
+                version: '2.0',
                 exportedAt: new Date().toISOString(),
+                exportedBy: currentUser.displayName || currentUser.email,
                 folders, links
             };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -768,20 +798,23 @@
                 }
 
                 for (const folder of data.folders) {
-                    await setDoc(doc(db, 'users', currentUser.uid, 'folders', folder.id || Date.now().toString()), {
+                    await setDoc(doc(db, 'folders', folder.id || Date.now().toString()), {
                         name: folder.name,
-                        createdAt: folder.createdAt || new Date().toISOString()
+                        createdAt: folder.createdAt || new Date().toISOString(),
+                        createdBy: folder.createdBy || currentUser.displayName || currentUser.email
                     });
                 }
 
                 for (const link of data.links) {
-                    await setDoc(doc(db, 'users', currentUser.uid, 'links', link.id || Date.now().toString()), {
+                    await setDoc(doc(db, 'links', link.id || Date.now().toString()), {
                         name: link.name,
                         url: link.url,
                         folder: link.folder,
                         tags: link.tags || [],
                         createdAt: link.createdAt || new Date().toISOString(),
-                        updatedAt: link.updatedAt || new Date().toISOString()
+                        createdBy: link.createdBy || currentUser.displayName || currentUser.email,
+                        updatedAt: link.updatedAt || new Date().toISOString(),
+                        updatedBy: currentUser.displayName || currentUser.email
                     });
                 }
 
