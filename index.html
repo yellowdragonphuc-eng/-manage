@@ -83,6 +83,8 @@
             width: 40px; height: 40px;
             border-radius: 50%;
             border: 3px solid #6366f1;
+            object-fit: cover;
+            background: #e2e8f0;
         }
         .logout-btn {
             background: #ef4444;
@@ -125,12 +127,10 @@
             align-items: center;
             background: #f8fafc;
             transition: all 0.3s;
+            position: relative;
         }
         .folder-item:hover, .folder-item.active {
             background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: white;
-        }
-        .folder-item.active .folder-delete-btn {
             color: white;
         }
         .folder-name {
@@ -138,23 +138,40 @@
             display: flex;
             align-items: center;
             gap: 8px;
-        }
-        .folder-delete-btn {
-            background: none;
-            border: none;
-            color: #ef4444;
             cursor: pointer;
-            font-size: 16px;
-            padding: 4px 8px;
-            border-radius: 6px;
+        }
+        .folder-actions {
+            display: flex;
+            gap: 4px;
             opacity: 0;
             transition: all 0.3s;
         }
-        .folder-item:hover .folder-delete-btn {
+        .folder-item:hover .folder-actions {
             opacity: 1;
         }
-        .folder-delete-btn:hover {
-            background: rgba(239, 68, 68, 0.2);
+        .folder-action-btn {
+            background: white;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        .folder-action-btn.edit-btn {
+            color: #f59e0b;
+        }
+        .folder-action-btn.edit-btn:hover {
+            background: #f59e0b;
+            color: white;
+        }
+        .folder-action-btn.delete-btn {
+            color: #ef4444;
+        }
+        .folder-action-btn.delete-btn:hover {
+            background: #ef4444;
+            color: white;
         }
         .add-folder-btn {
             width: 100%;
@@ -188,12 +205,6 @@
             font-size: 14px;
         }
         .search-box input:focus { outline: none; border-color: #6366f1; }
-        .search-icon {
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
         .btn {
             padding: 12px 20px;
             border: none;
@@ -265,6 +276,7 @@
             border: none; border-radius: 8px;
             cursor: pointer;
             display: flex; align-items: center; justify-content: center;
+            font-size: 14px;
         }
         .icon-btn.edit { background: #f59e0b; color: white; }
         .icon-btn.delete { background: #ef4444; color: white; }
@@ -376,7 +388,7 @@
                 <h1>VoiceLinks Manager</h1>
             </div>
             <div class="user-info">
-                <img id="userAvatar" class="user-avatar" src="" alt="Avatar">
+                <img id="userAvatar" class="user-avatar" src="" alt="Avatar" onerror="this.src='https://ui-avatars.com/api/?name=User&background=6366f1&color=fff'">
                 <span id="userName"></span>
                 <button class="logout-btn" id="logoutBtn">Đăng xuất</button>
             </div>
@@ -384,7 +396,7 @@
 
         <div class="main-content">
             <aside class="sidebar">
-                <h2> Thư mục</h2>
+                <h2>📁 Thư mục</h2>
                 <ul id="folderList" class="folder-list"></ul>
                 <button class="add-folder-btn" id="addFolderBtn">+ Thêm thư mục</button>
             </aside>
@@ -411,7 +423,7 @@
                     </div>
                     <button class="btn btn-primary" id="addLinkBtn">+ Thêm link</button>
                     <button class="btn btn-success" id="exportBtn">💾 Xuất JSON</button>
-                    <button class="btn btn-secondary" id="importBtn">📂 Nhập JSON</button>
+                    <button class="btn btn-secondary" id="importBtn"> Nhập JSON</button>
                     <input type="file" id="importFile" accept=".json" style="display:none">
                 </div>
 
@@ -457,17 +469,18 @@
     <div id="folderModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Thêm thư mục mới</h2>
+                <h2 id="folderModalTitle">Thêm thư mục mới</h2>
                 <button class="close-btn" id="closeFolderModal">&times;</button>
             </div>
             <form id="folderForm">
+                <input type="hidden" id="folderId">
                 <div class="form-group">
                     <label>Tên thư mục *</label>
                     <input type="text" id="folderName" required placeholder="Ví dụ: Nhạc yêu thích">
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" id="cancelFolderBtn">Hủy</button>
-                    <button type="submit" class="btn btn-primary">Tạo</button>
+                    <button type="submit" class="btn btn-primary" id="folderSubmitBtn">Tạo</button>
                 </div>
             </form>
         </div>
@@ -530,6 +543,18 @@
         const folderModal = document.getElementById('folderModal');
         const linkForm = document.getElementById('linkForm');
         const folderForm = document.getElementById('folderForm');
+        const folderModalTitle = document.getElementById('folderModalTitle');
+        const folderSubmitBtn = document.getElementById('folderSubmitBtn');
+
+        // Hàm tạo avatar fallback
+        function getAvatarUrl(user) {
+            if (user.photoURL) {
+                return user.photoURL;
+            }
+            // Tạo avatar từ tên người dùng
+            const name = user.displayName || user.email || 'User';
+            return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&size=128`;
+        }
 
         // Auth State
         onAuthStateChanged(auth, (user) => {
@@ -537,7 +562,10 @@
                 currentUser = user;
                 loginScreen.style.display = 'none';
                 appContainer.style.display = 'block';
-                userAvatar.src = user.photoURL || 'https://via.placeholder.com/40';
+                userAvatar.src = getAvatarUrl(user);
+                userAvatar.onerror = function() {
+                    this.src = 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff';
+                };
                 userName.textContent = user.displayName || user.email;
                 loadData();
             } else {
@@ -608,7 +636,10 @@
                 folderList.innerHTML += `
                     <li class="folder-item ${currentFolder === folder.id ? 'active' : ''}" data-folder="${folder.id}">
                         <span class="folder-name">📁 ${folder.name} (${linkCount})</span>
-                        <button class="folder-delete-btn" data-folder-id="${folder.id}" title="Xóa thư mục">🗑️</button>
+                        <div class="folder-actions">
+                            <button class="folder-action-btn edit-btn" data-folder-id="${folder.id}" title="Sửa tên">✏️ Sửa</button>
+                            <button class="folder-action-btn delete-btn" data-folder-id="${folder.id}" title="Xóa thư mục">️ Xóa</button>
+                        </div>
                     </li>
                 `;
             });
@@ -621,15 +652,23 @@
             // Folder click handler
             folderList.querySelectorAll('.folder-item').forEach(item => {
                 item.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('folder-delete-btn')) return;
+                    if (e.target.closest('.folder-actions')) return;
                     currentFolder = item.dataset.folder;
                     renderFolders();
                     renderLinks();
                 });
             });
 
+            // Edit folder handler
+            folderList.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    editFolder(btn.dataset.folderId);
+                });
+            });
+
             // Delete folder handler
-            folderList.querySelectorAll('.folder-delete-btn').forEach(btn => {
+            folderList.querySelectorAll('.delete-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     deleteFolder(btn.dataset.folderId);
@@ -645,14 +684,13 @@
             
             let confirmMsg = `Bạn có chắc muốn xóa thư mục "${folder.name}"?`;
             if (linkCount > 0) {
-                confirmMsg += `\n\n⚠️ Thư mục này đang chứa ${linkCount} link(s). Các link này sẽ bị mất!`;
+                confirmMsg += `\n\n️ Thư mục này đang chứa ${linkCount} link(s). Các link này sẽ bị mất!`;
             }
             confirmMsg += '\n\nHành động này không thể hoàn tác!';
 
             if (!confirm(confirmMsg)) return;
 
             try {
-                // Delete all links in this folder
                 if (linkCount > 0) {
                     const linksToDelete = links.filter(l => l.folder === folderId);
                     for (const link of linksToDelete) {
@@ -660,10 +698,8 @@
                     }
                 }
 
-                // Delete folder
                 await deleteDoc(doc(db, 'users', currentUser.uid, 'folders', folderId));
 
-                // If current folder is deleted, switch to 'all'
                 if (currentFolder === folderId) {
                     currentFolder = 'all';
                 }
@@ -672,6 +708,17 @@
             } catch (error) {
                 alert('Lỗi xóa thư mục: ' + error.message);
             }
+        }
+
+        function editFolder(folderId) {
+            const folder = folders.find(f => f.id === folderId);
+            if (!folder) return;
+
+            folderModalTitle.textContent = 'Sửa tên thư mục';
+            folderSubmitBtn.textContent = 'Cập nhật';
+            document.getElementById('folderId').value = folder.id;
+            document.getElementById('folderName').value = folder.name;
+            folderModal.classList.add('active');
         }
 
         function renderLinks() {
@@ -812,6 +859,10 @@
 
         // Folder Modal
         addFolderBtn.addEventListener('click', () => {
+            folderModalTitle.textContent = 'Thêm thư mục mới';
+            folderSubmitBtn.textContent = 'Tạo';
+            folderForm.reset();
+            document.getElementById('folderId').value = '';
             folderModal.classList.add('active');
         });
 
@@ -825,17 +876,28 @@
 
         folderForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const folderId = document.getElementById('folderId').value;
             const name = document.getElementById('folderName').value.trim();
+
             try {
-                await setDoc(doc(db, 'users', currentUser.uid, 'folders', Date.now().toString()), {
-                    name,
-                    createdAt: new Date().toISOString()
-                });
+                if (folderId) {
+                    // Update existing folder
+                    await setDoc(doc(db, 'users', currentUser.uid, 'folders', folderId), {
+                        name,
+                        updatedAt: new Date().toISOString()
+                    }, { merge: true });
+                } else {
+                    // Create new folder
+                    await setDoc(doc(db, 'users', currentUser.uid, 'folders', Date.now().toString()), {
+                        name,
+                        createdAt: new Date().toISOString()
+                    });
+                }
                 folderModal.classList.remove('active');
                 folderForm.reset();
                 await loadData();
             } catch (error) {
-                alert('Lỗi tạo thư mục: ' + error.message);
+                alert('Lỗi lưu thư mục: ' + error.message);
             }
         });
 
