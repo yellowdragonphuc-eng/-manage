@@ -183,6 +183,35 @@
         }
         .icon-btn.edit { background: #f59e0b; color: white; }
         .icon-btn.delete { background: #ef4444; color: white; }
+        
+        /* Audio Player Styles */
+        .audio-embed {
+            background: white;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #e2e8f0;
+        }
+        .audio-embed audio {
+            width: 100%;
+            height: 40px;
+            border-radius: 6px;
+        }
+        .audio-embed iframe {
+            width: 100%;
+            border: none;
+            border-radius: 6px;
+        }
+        .audio-embed .youtube-embed {
+            height: 200px;
+        }
+        .audio-embed .vocaroo-embed {
+            height: 60px;
+        }
+        .audio-embed .soundcloud-embed {
+            height: 166px;
+        }
+        
         .link-url {
             background: white; padding: 12px; border-radius: 8px;
             font-size: 13px; margin-bottom: 12px;
@@ -201,6 +230,18 @@
         .link-url a .link-icon {
             font-size: 16px; flex-shrink: 0;
         }
+        
+        .download-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 14px; background: #10b981; color: white;
+            border: none; border-radius: 8px; cursor: pointer;
+            font-size: 13px; font-weight: 600; text-decoration: none;
+            transition: all 0.3s; margin-top: 8px;
+        }
+        .download-btn:hover {
+            background: #059669; transform: translateY(-2px);
+        }
+        
         .link-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .tag {
             padding: 4px 10px; background: white;
@@ -260,6 +301,12 @@
             font-weight: 600;
             margin-left: 8px;
         }
+        .embed-hint {
+            font-size: 11px;
+            color: #10b981;
+            margin-top: 4px;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -269,7 +316,7 @@
             <h1>🎵 VoiceLinks Manager</h1>
             <p>Quản lý và chia sẻ link âm thanh với bạn bè</p>
             <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: #92400e;">
-                ️ Dữ liệu được chia sẻ chung cho tất cả người dùng
+                ⚠️ Dữ liệu được chia sẻ chung cho tất cả người dùng
             </div>
             <button class="google-btn" id="googleLoginBtn">🔐 Đăng nhập bằng Google</button>
         </div>
@@ -278,7 +325,7 @@
     <div id="appContainer" class="app-container">
         <header class="header">
             <div class="logo">
-                <div class="logo-icon"></div>
+                <div class="logo-icon">🎵</div>
                 <h1>VoiceLinks Manager <span class="shared-badge">SHARED</span></h1>
             </div>
             <div class="user-info">
@@ -290,7 +337,7 @@
 
         <div class="main-content">
             <aside class="sidebar">
-                <h2>📁 Thư mục</h2>
+                <h2> Thư mục</h2>
                 <ul id="folderList" class="folder-list"></ul>
                 <button class="add-folder-btn" id="addFolderBtn">+ Thêm thư mục</button>
             </aside>
@@ -316,8 +363,8 @@
                         <input type="text" id="searchInput" placeholder="🔍 Tìm kiếm theo tên, URL hoặc tag...">
                     </div>
                     <button class="btn btn-primary" id="addLinkBtn">+ Thêm link</button>
-                    <button class="btn btn-success" id="exportBtn">💾 Xuất JSON</button>
-                    <button class="btn btn-secondary" id="importBtn">📂 Nhập JSON</button>
+                    <button class="btn btn-success" id="exportBtn"> Xuất JSON</button>
+                    <button class="btn btn-secondary" id="importBtn"> Nhập JSON</button>
                     <input type="file" id="importFile" accept=".json" style="display:none">
                 </div>
 
@@ -340,7 +387,7 @@
                 </div>
                 <div class="form-group">
                     <label>URL *</label>
-                    <input type="url" id="linkUrl" required placeholder="https://voca.ro/...">
+                    <input type="url" id="linkUrl" required placeholder="https://voca.ro/... hoặc https://youtube.com/...">
                 </div>
                 <div class="form-group">
                     <label>Thư mục *</label>
@@ -434,6 +481,64 @@
             return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&size=128`;
         }
 
+        // Hàm nhận diện loại link và tạo embed
+        function detectLinkType(url) {
+            if (!url) return { type: 'unknown', embed: null };
+            
+            // Vocaroo
+            const vocarooMatch = url.match(/voca\.ro\/([a-zA-Z0-9]+)/);
+            if (vocarooMatch) {
+                const id = vocarooMatch[1];
+                return {
+                    type: 'vocaroo',
+                    embed: `<iframe class="vocaroo-embed" src="https://vocaroo.com/embed/${id}?autoplay=0" allow="autoplay"></iframe>`,
+                    downloadUrl: `https://media.vocaroo.com/mp3/${id}`,
+                    hint: ' Vocaroo Player'
+                };
+            }
+            
+            // YouTube
+            const youtubeMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+            if (youtubeMatch) {
+                const id = youtubeMatch[1];
+                return {
+                    type: 'youtube',
+                    embed: `<iframe class="youtube-embed" src="https://www.youtube.com/embed/${id}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`,
+                    downloadUrl: null,
+                    hint: ' YouTube Player'
+                };
+            }
+            
+            // SoundCloud
+            if (url.includes('soundcloud.com')) {
+                return {
+                    type: 'soundcloud',
+                    embed: `<iframe class="soundcloud-embed" src="https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23ff5500&inverse=false&auto_play=false&show_user=true"></iframe>`,
+                    downloadUrl: null,
+                    hint: '🎵 SoundCloud Player'
+                };
+            }
+            
+            // Direct audio file (mp3, wav, ogg, m4a)
+            const audioMatch = url.match(/\.(mp3|wav|ogg|m4a|aac)(\?|$)/i);
+            if (audioMatch) {
+                return {
+                    type: 'audio',
+                    embed: `<audio controls src="${url}"></audio>`,
+                    downloadUrl: url,
+                    hint: '🎧 Audio Player'
+                };
+            }
+            
+            // Unknown - chỉ hiển thị link
+            return {
+                type: 'unknown',
+                embed: null,
+                downloadUrl: url,
+                hint: null
+            };
+        }
+
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = user;
@@ -465,7 +570,6 @@
         async function loadData() {
             if (!currentUser) return;
             try {
-                // Load folders - SHARED (không theo user)
                 const foldersRef = collection(db, 'folders');
                 const foldersSnap = await getDocs(foldersRef);
                 folders = foldersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -474,12 +578,11 @@
                     await setDoc(doc(db, 'folders', 'default'), {
                         name: 'Chưa phân loại', 
                         createdAt: new Date().toISOString(),
-                        createdBy: currentUser.displayName || currentUser.email
+                        createdBy: currentUser.displayName || 'Thành viên'
                     });
                     folders = [{ id: 'default', name: 'Chưa phân loại' }];
                 }
 
-                // Load links - SHARED (không theo user)
                 const linksRef = collection(db, 'links');
                 const linksSnap = await getDocs(linksRef);
                 links = linksSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -504,9 +607,9 @@
                 const linkCount = links.filter(l => l.folder === folder.id).length;
                 folderList.innerHTML += `
                     <li class="folder-item ${currentFolder === folder.id ? 'active' : ''}" data-folder="${folder.id}">
-                        <span class="folder-name"> ${folder.name} (${linkCount})</span>
+                        <span class="folder-name">📁 ${folder.name} (${linkCount})</span>
                         <div class="folder-actions">
-                            <button class="folder-action-btn edit-btn" data-folder-id="${folder.id}" title="Sửa tên">️ Sửa</button>
+                            <button class="folder-action-btn edit-btn" data-folder-id="${folder.id}" title="Sửa tên">✏️ Sửa</button>
                             <button class="folder-action-btn delete-btn" data-folder-id="${folder.id}" title="Xóa thư mục">🗑️ Xóa</button>
                         </div>
                     </li>
@@ -549,7 +652,7 @@
             const linkCount = links.filter(l => l.folder === folderId).length;
             let confirmMsg = `Bạn có chắc muốn xóa thư mục "${folder.name}"?`;
             if (linkCount > 0) {
-                confirmMsg += `\n\n⚠️ Thư mục này đang chứa ${linkCount} link(s). Các link này sẽ bị mất!`;
+                confirmMsg += `\n\n️ Thư mục này đang chứa ${linkCount} link(s). Các link này sẽ bị mất!`;
             }
             confirmMsg += '\n\nHành động này không thể hoàn tác!';
 
@@ -612,6 +715,40 @@
                 const date = new Date(link.createdAt).toLocaleDateString('vi-VN');
                 const tags = link.tags ? link.tags.map(t => `<span class="tag">${t}</span>`).join('') : '';
                 const author = link.createdBy || 'Unknown';
+                
+                // Detect link type and create embed
+                const linkInfo = detectLinkType(link.url);
+                
+                let embedSection = '';
+                if (linkInfo.embed) {
+                    embedSection = `
+                        <div class="audio-embed">
+                            ${linkInfo.embed}
+                            ${linkInfo.hint ? `<div class="embed-hint">${linkInfo.hint}</div>` : ''}
+                        </div>
+                    `;
+                }
+                
+                let downloadSection = '';
+                if (linkInfo.downloadUrl) {
+                    downloadSection = `
+                        <a href="${linkInfo.downloadUrl}" download target="_blank" class="download-btn">
+                            ⬇️ Tải về
+                        </a>
+                    `;
+                }
+                
+                let urlSection = '';
+                if (link.url) {
+                    urlSection = `
+                        <div class="link-url">
+                            <a href="${link.url}" target="_blank" rel="noopener noreferrer">
+                                <span class="link-icon">🌐</span>
+                                <span>${link.url}</span>
+                            </a>
+                        </div>
+                    `;
+                }
 
                 return `
                     <div class="link-card" data-id="${link.id}">
@@ -623,15 +760,12 @@
                             </div>
                             <div class="link-actions">
                                 <button class="icon-btn edit" data-action="edit" data-id="${link.id}" title="Sửa">✏️</button>
-                                <button class="icon-btn delete" data-action="delete" data-id="${link.id}" title="Xóa">🗑️</button>
+                                <button class="icon-btn delete" data-action="delete" data-id="${link.id}" title="Xóa">️</button>
                             </div>
                         </div>
-                        <div class="link-url">
-                            <a href="${link.url}" target="_blank" rel="noopener noreferrer">
-                                <span class="link-icon">🌐</span>
-                                <span>${link.url}</span>
-                            </a>
-                        </div>
+                        ${embedSection}
+                        ${urlSection}
+                        ${downloadSection}
                         <div class="link-tags">${tags}</div>
                         <div class="link-date">📅 ${date}</div>
                     </div>
@@ -700,18 +834,18 @@
                 folder: document.getElementById('linkFolder').value,
                 tags: document.getElementById('linkTags').value.split(',').map(t => t.trim()).filter(t => t),
                 updatedAt: new Date().toISOString(),
-                updatedBy: currentUser.displayName || currentUser.email
+                updatedBy: currentUser.displayName || 'Thành viên'
             };
 
             try {
                 if (id) {
                     const existingLink = links.find(l => l.id === id);
                     linkData.createdAt = existingLink.createdAt;
-                    linkData.createdBy = existingLink.createdBy || currentUser.displayName || currentUser.email;
+                    linkData.createdBy = existingLink.createdBy || currentUser.displayName || 'Thành viên';
                     await setDoc(doc(db, 'links', id), linkData);
                 } else {
                     linkData.createdAt = new Date().toISOString();
-                    linkData.createdBy = currentUser.displayName || currentUser.email;
+                    linkData.createdBy = currentUser.displayName || 'Thành viên';
                     const newId = Date.now().toString();
                     await setDoc(doc(db, 'links', newId), linkData);
                 }
@@ -748,13 +882,13 @@
                     await setDoc(doc(db, 'folders', folderId), {
                         name, 
                         updatedAt: new Date().toISOString(),
-                        updatedBy: currentUser.displayName || currentUser.email
+                        updatedBy: currentUser.displayName || 'Thành viên'
                     }, { merge: true });
                 } else {
                     await setDoc(doc(db, 'folders', Date.now().toString()), {
                         name, 
                         createdAt: new Date().toISOString(),
-                        createdBy: currentUser.displayName || currentUser.email
+                        createdBy: currentUser.displayName || 'Thành viên'
                     });
                 }
                 folderModal.classList.remove('active');
@@ -771,7 +905,7 @@
             const data = {
                 version: '2.0',
                 exportedAt: new Date().toISOString(),
-                exportedBy: currentUser.displayName || currentUser.email,
+                exportedBy: currentUser.displayName || 'Thành viên',
                 folders, links
             };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -801,7 +935,7 @@
                     await setDoc(doc(db, 'folders', folder.id || Date.now().toString()), {
                         name: folder.name,
                         createdAt: folder.createdAt || new Date().toISOString(),
-                        createdBy: folder.createdBy || currentUser.displayName || currentUser.email
+                        createdBy: folder.createdBy || currentUser.displayName || 'Thành viên'
                     });
                 }
 
@@ -812,9 +946,9 @@
                         folder: link.folder,
                         tags: link.tags || [],
                         createdAt: link.createdAt || new Date().toISOString(),
-                        createdBy: link.createdBy || currentUser.displayName || currentUser.email,
+                        createdBy: link.createdBy || currentUser.displayName || 'Thành viên',
                         updatedAt: link.updatedAt || new Date().toISOString(),
-                        updatedBy: currentUser.displayName || currentUser.email
+                        updatedBy: currentUser.displayName || 'Thành viên'
                     });
                 }
 
